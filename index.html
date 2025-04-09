@@ -1,0 +1,168 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="styles.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.8.0/jszip.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.8.0/xlsx.js"></script>
+
+        <script>
+
+            $( document ).ready(function() {
+                const qrSize = 180 
+
+                document.getElementById('upload').addEventListener('change', handleFileSelect, false);
+
+                function prepareHtml(groups) {
+                    var html = ""
+                    for(var i=0; i<groups.length; i++) {
+                        var desks = groups[i]
+                        html += "<section><table>"
+
+                        var row = ""
+                        for(var j=0; j<desks.length; j++) {
+                            if(j % 3 === 0) {
+                                if(j > 0) {
+                                    html += "<tr>" + row + "</tr>"
+                                }
+                                row = ""
+                            }
+                            row += "<td>" + getHtmlBlock(desks[j].id, desks[j].code) + "</td>"
+                        }
+                        if(row !== "") {
+                            html += "<tr>" + row + "</tr>"
+                        }
+
+                        html += "</table></section>"
+                    }
+                    document.getElementById('content').innerHTML = html;
+                }
+
+                function fillHtmlWithData(groups) {
+                    for(var i=0; i<groups.length; i++) {
+                        var desks = groups[i]
+                        for(var j=0; j<desks.length; j++) {
+                            var desk = desks[j]
+                            showQR(desk.id, desk.name, desk.code)
+                        }
+                    }
+                }
+
+                function getGroupsOfDesks(records) {
+                    var result = []
+                    var desks = getDesks(records)
+                    while(desks.length>0) {
+                        var group = []
+                        for(var i=0; i<9; i++) { // 3 rows x 3 cols = 1 page/table
+                            if(desks.length>0) {
+                                group.push(desks.shift())
+                            }
+                        }
+                        result.push(group)
+                    }
+                    return result
+                }
+
+                function getDesks(records) {
+                    var result = []
+                    for(var i=0; i<records.length; i++) {
+                        var name = records[i] && records[i].name ? records[i].name : '';
+                        var code = records[i] && records[i].code ? records[i].code : '';
+                        result.push({id: "qr"+(i+1), name: formatDeskName(name), code: code})
+                    }
+                    return result
+                }
+
+                function formatDeskName(name) {
+                    if (!name) return '';
+                    var arr = name.split(".")
+                    if(arr.length>1) {
+                        var str = '' + arr[1];
+                        while (str.length < 3) {
+                            str = '0' + str;
+                        }
+                        return arr[0] + "." + str
+                    } else {
+                        return name
+                    }
+                }
+
+                function showQR(itemId, label, code) {
+                    const background = '#FFFFFF'
+                    $("#"+itemId).qrcode({
+                        canvas: 'render',
+                        text: code,
+                        size: qrSize,
+                        mode: 2,  // 2 means label box mode
+                        label: label,
+                        fontname: 'Arial',
+                        fontcolor: '#0B1641',
+                        background: background,
+                        fill: '#0B1641',
+                        ecLevel: 'H',
+                        mSize: 0.15,  // Size of the label relative to QR code
+                        mPosX: 0.5,   // Horizontal position (0.5 = center)
+                        mPosY: 0.5,   // Vertical position (0.5 = center)
+                        fontsize: 14,  // Font size for the label
+                    });
+                }
+
+                function getHtmlBlock(itemId, code) {
+                    return '<div class="qr"><div class="title">Scan to confirm</div><div class="txt">All bookings done via fleX need to be confirmed.<br><br>If the QR code doesn\'t work, use this code instead:</div><div class="code">'+code+'</div><div id="'+itemId+'"></div></div>'
+                }
+
+
+                var ExcelToJSON = function() {
+
+                    this.parseExcel = function(file) {
+                        var reader = new FileReader()
+
+                        reader.onload = function(e) {
+                            var data = e.target.result;
+                            var workbook = XLSX.read(data, {
+                                type: 'binary'
+                            });
+                            workbook.SheetNames.forEach(function(sheetName) {
+                                var XL_row_object = XLSX.utils.sheet_to_row_object_array(workbook.Sheets[sheetName]);
+                                var json_object = JSON.stringify(XL_row_object)
+                                const records = JSON.parse(json_object)
+                                
+                                console.log('Parsed records:', records);
+
+                                $('#frm').hide()
+
+                                $('#content').css('backgroundColor', "white");
+
+                                var groups = getGroupsOfDesks(records)
+                                prepareHtml(groups)
+                                fillHtmlWithData(groups)
+
+                            })
+                        };
+
+                        reader.onerror = function(ex) {
+                            console.log(ex)
+                        };
+
+                        reader.readAsBinaryString(file)
+                        };
+                    };
+
+
+                function handleFileSelect(evt) {
+                    var files = evt.target.files
+                    var xl2json = new ExcelToJSON()
+                    xl2json.parseExcel(files[0])
+                }
+            });
+        </script>
+    </head>
+    <body>
+        <form id="frm" enctype="multipart/form-data">
+            <input id="upload" type=file  name="files[]">
+        </form>
+
+        <div id="content"></div>
+        
+        <script src="jquery-qrcode.js"></script>
+    </body>
+</html>
